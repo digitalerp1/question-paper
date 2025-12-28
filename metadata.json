@@ -1,0 +1,5 @@
+{
+  "name": "ExamCraft AI",
+  "description": "Smart question paper generator that creates compact, A4-ready exam papers from uploaded files using Gemini AI.",
+  "requestFramePermissions": []
+}
