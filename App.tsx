@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Printer, FileText, Settings, Type, Play, RefreshCw, Columns, Image as ImageIcon, Download } from 'lucide-react';
+import { Upload, Printer, FileText, Settings, Type, Play, RefreshCw, Columns, Image as ImageIcon, Download, Key, Cpu } from 'lucide-react';
 import { generateQuestionsStream } from './services/gemini';
 import { QuestionType } from './types';
 import MarkdownPreview from './components/MarkdownPreview';
@@ -7,6 +7,9 @@ import html2canvas from 'html2canvas';
 
 const App: React.FC = () => {
   // State
+  const [apiKey, setApiKey] = useState<string>('');
+  const [modelMode, setModelMode] = useState<string>('auto');
+  const [customModel, setCustomModel] = useState<string>('');
   const [files, setFiles] = useState<File[]>([]);
   const [prompt, setPrompt] = useState<string>('');
   const [questionCount, setQuestionCount] = useState<number>(20);
@@ -36,6 +39,10 @@ const App: React.FC = () => {
   };
 
   const handleGenerate = async () => {
+    if (!apiKey) {
+      alert("Please enter your Gemini API Key.");
+      return;
+    }
     if (!prompt && files.length === 0) {
       alert("Please upload a file or enter a topic prompt.");
       return;
@@ -44,8 +51,13 @@ const App: React.FC = () => {
     setIsGenerating(true);
     setGeneratedContent(''); // Clear previous
 
+    // Determine effective model
+    const effectiveModel = modelMode === 'custom' ? customModel : modelMode;
+
     try {
       await generateQuestionsStream(
+        apiKey,
+        effectiveModel,
         files,
         prompt,
         questionCount,
@@ -54,9 +66,17 @@ const App: React.FC = () => {
           setGeneratedContent(prev => prev + chunk);
         }
       );
-    } catch (error) {
+    } catch (error: any) {
       console.error("Generation failed", error);
-      setGeneratedContent(prev => prev + "\n\n**Error: Failed to generate content. Please check your API key and try again.**");
+      let errorMessage = "**Error: Failed to generate content.**";
+      if (error.message.includes("API Key")) {
+        errorMessage += " Invalid or missing API Key.";
+      } else if (error.message.includes("404")) {
+        errorMessage += ` Model '${effectiveModel}' not found or incompatible.`;
+      } else {
+        errorMessage += " Please check your connection and try again.";
+      }
+      setGeneratedContent(prev => prev + "\n\n" + errorMessage);
     } finally {
       setIsGenerating(false);
     }
@@ -126,6 +146,24 @@ const App: React.FC = () => {
           </div>
         </div>
 
+        {/* Section 0: Credentials */}
+        <div className="space-y-4 border-t border-slate-700 pt-4">
+          <h2 className="text-sm font-semibold uppercase text-slate-400 tracking-wider flex items-center gap-2">
+            <Key className="w-4 h-4" /> Credentials
+          </h2>
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1">Gemini API Key</label>
+            <input 
+              type="password"
+              placeholder="Paste your API Key here..."
+              className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+            />
+            <p className="text-[10px] text-slate-500 mt-1">Key is used locally and never stored.</p>
+          </div>
+        </div>
+
         {/* Section 1: Input */}
         <div className="space-y-4 border-t border-slate-700 pt-4">
           <h2 className="text-sm font-semibold uppercase text-slate-400 tracking-wider flex items-center gap-2">
@@ -167,6 +205,34 @@ const App: React.FC = () => {
           <h2 className="text-sm font-semibold uppercase text-slate-400 tracking-wider flex items-center gap-2">
             <Settings className="w-4 h-4" /> Configuration
           </h2>
+
+          {/* Model Selection */}
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1 flex items-center gap-1">
+              <Cpu className="w-3 h-3" /> AI Model
+            </label>
+            <select 
+              className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm text-slate-200 mb-2"
+              value={modelMode}
+              onChange={(e) => setModelMode(e.target.value)}
+            >
+              <option value="auto">Auto (Recommended)</option>
+              <option value="gemini-2.5-flash">Gemini 2.5 Flash (Fastest)</option>
+              <option value="gemini-2.5-flash-image">Gemini 2.5 Flash Image</option>
+              <option value="gemini-3-pro-preview">Gemini 3.0 Pro (High IQ)</option>
+              <option value="custom">Custom Model Name...</option>
+            </select>
+            
+            {modelMode === 'custom' && (
+              <input 
+                type="text"
+                placeholder="e.g. gemini-1.5-pro"
+                className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
+                value={customModel}
+                onChange={(e) => setCustomModel(e.target.value)}
+              />
+            )}
+          </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -308,7 +374,7 @@ const App: React.FC = () => {
             </div>
             <p className="text-lg">Generated paper preview will appear here.</p>
             <p className="text-sm max-w-md text-center">
-              Configure your settings on the left, upload your source material, and click generate.
+              Configure your settings on the left, enter your API key, and click generate.
             </p>
           </div>
         )}

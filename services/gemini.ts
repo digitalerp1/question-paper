@@ -1,8 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { QuestionType, type FileData } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 // Helper to convert file to base64
 export const fileToPart = (file: File): Promise<FileData> => {
   return new Promise((resolve, reject) => {
@@ -22,12 +20,20 @@ export const fileToPart = (file: File): Promise<FileData> => {
 };
 
 export const generateQuestionsStream = async (
+  apiKey: string,
+  modelSelection: string,
   files: File[],
   prompt: string,
   count: number,
   type: QuestionType,
   onChunk: (text: string) => void
 ) => {
+  if (!apiKey) {
+    throw new Error("API Key is missing. Please enter your Google Gemini API Key.");
+  }
+
+  // Initialize AI with the user-provided key
+  const ai = new GoogleGenAI({ apiKey });
   
   // Prepare file parts
   const fileParts = await Promise.all(files.map(fileToPart));
@@ -53,9 +59,13 @@ export const generateQuestionsStream = async (
     ENSURE SPEED AND ACCURACY.
   `;
 
-  // Use 'gemini-2.5-flash-image' for multimodal inputs (images/PDFs)
-  // Use 'gemini-2.5-flash' for text-only inputs for MAXIMUM SPEED
-  const modelName = fileParts.length > 0 ? 'gemini-2.5-flash-image' : 'gemini-2.5-flash';
+  // Determine the model
+  let modelName = modelSelection;
+  
+  // If "auto" is selected, choose based on input type
+  if (modelSelection === 'auto') {
+    modelName = fileParts.length > 0 ? 'gemini-2.5-flash-image' : 'gemini-2.5-flash';
+  }
 
   try {
     const responseStream = await ai.models.generateContentStream({
